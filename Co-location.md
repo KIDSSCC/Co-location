@@ -289,3 +289,40 @@ Linux上工具可以限制某个容器的 内存容量，磁盘带宽。以上�
 前四张图是待测应用和Memcached，Xapian协同运行，最后一张图是六个应用一起运行，Moses：10%，Sphinx：10%，MongoBD：100%
 
 ##### 5.2.2 与Heracles的比较
+
+Heracles适用于一个LC与多个BE，对比的方案为，以一个待测应用作为LC业务，剩下的几个应用作为BE业务
+
+![image-20231017145600514](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231017145600514.png)
+
+1. 当LC业务QoS违规时，Heracles会挂起BE，但如果BE也是一个延迟敏感的业务，会导致更严重的QoS违规
+2. Heracles在BE业务中不进行资源分区
+3. Heracles中的资源控制器比较独立。在进行分配时比较激进或保守
+4. Heracles不支持对内存容量和磁盘带宽的操作
+
+##### 5.2.3 与其他资源控制器的比较
+
+比较了另外的两种资源控制器，
+
+- unmanaged：不进行任何资源隔离，仅依靠操作系统来进行资源的调度
+- Oracle：通过在线的分析来确定可行方案，（**可能是指最理想的情况？**）
+
+![image-20231017150648170](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231017150648170.png)
+
+#### 5.3 波动负载
+
+![image-20231017151405020](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231017151405020.png)
+
+1. 第一幅图，Moses保持负载为10%，Xapian保持负载为20%，memcached负载从10%开始，逐渐增长到60%，再衰减回10%
+2. 第二幅图，再unmanaged下，各应用延迟的波动，Xapian和Moses还能保证正常的业务，memcached随着负载的增长，Qos严重违规
+3. 第三幅图，在Heracles下，保证了Memcached的QoS，但是挂起了另外两个应用
+4. 第四幅图，在Parties下，各个应用表现均较好，不存在一个应用长期QoS违规
+5. 第五幅图，BE业务的吞吐量
+6. 第六幅图，Parties给各个应用分配的核心数量
+7. 第七幅图和第八幅图，（**不理解为什么会产生这样的 变化**）
+
+#### 5.4 Parties的开销
+
+![image-20231017153036379](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231017153036379.png)
+
+随着并行应用的增加，总的搜索空间会大幅增加，但是Parties总的搜索时间增长速度较慢
+
