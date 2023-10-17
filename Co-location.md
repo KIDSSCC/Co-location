@@ -271,3 +271,21 @@ Linux上工具可以限制某个容器的 内存容量，磁盘带宽。以上�
 1. 先以恒定负载运行，再考虑日常的负载变化
 2. 对于每个应用，负载从10%到100%，以10%为增量，这样对于每个应用就是10种负载，（N个应用，测试空间就是10的N方）
 3. 30s预热，60s运行，重复3次
+
+#### 5.2 恒定负载
+
+##### 5.2.1 parties的性能
+
+###### 两个应用协同运行
+
+![image-20231017110857968](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231017110857968.png)
+
+横轴代表的是待测应用的负载。纵轴六条线代表和当前待测应用一起运行的其他应用。图中能看出mongoDB协同运行比较好，能够和其他的应用都以较大负载运行
+
+###### 三至六个应用协同运行
+
+![image-20231017113912703](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231017113912703.png)
+
+前四张图是待测应用和Memcached，Xapian协同运行，最后一张图是六个应用一起运行，Moses：10%，Sphinx：10%，MongoBD：100%
+
+##### 5.2.2 与Heracles的比较
