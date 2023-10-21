@@ -413,3 +413,370 @@ Clite使用BO来加速对配置空间的探索
 
 5. 缓解多维空间探索的压力
 6. 动态的中止条件
+
+### 5. CLite的实验评估分析
+
+#### 5.1 实验方法论
+
+实验平台：
+
+![image-20231019111426464](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231019111426464.png)
+
+实验中运行的LC和BE业务
+
+![image-20231019111836758](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231019111836758.png)
+
+- 还是先测了LC业务的QoS目标与最大负载，不断增加负载观察延迟变化情况，CLIte是以95百分位作为QoS目标
+
+![image-20231019112157213](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231019112157213.png)
+
+（认为CPU功率不重要）
+
+#### 5.2 实验结果分析
+
+<img src="https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231019142209098.png" alt="image-20231019142209098" style="zoom:50%;" />
+
+在没有BE业务的情况下，各种方法，在三个应用协同调度下能达到的最大负载。横轴为masstree的负载，纵轴为imgdnn的负载，每一格代表在不违反QOS的情况下，memcached能达到的最大负载。
+
+![image-20231019142710634](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231019142710634.png)
+
+和上图比较类似，还是协同调度三个LC，同时额外加了一个BE业务
+
+![image-20231019143622976](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231019143622976.png)
+
+(a)是Parties方法和CLite方法在不同资源山给出的分配方案。即便二者都是满足了LC业务的Qos目标。他们给出的方案是不同的。
+
+具体的原因是Parties在找到满足QoS的目标之后就停止了。开始回收资源用于BE业务。但CLite方法在达到QoS目标之后，仍在不断的调整方法。根据资源的等价性以及应用对资源的敏感程度，来寻找怎样最大会BE业务的吞吐量
+
+(b)是parties方法和CLite方法在多次进行采样之后对资源分配的调整。Parties在采样100次内陷入了循环，认为当前的应用不能被协同调度。需要进行负载迁移。而CLite在30次内就找到了可行解
+
+![image-20231019144802624](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231019144802624.png)
+
+在固定两个应用的负载，动态调整第三个应用的负载。各个方法与Oracle之间的差距。（但这里没看懂这个最终的性能表现是指BE的吞吐量还是其他什么目标）
+
+![image-20231019153413718](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231019153413718.png)
+
+同样的方案多次运行，CLite在性能表现上的方差最小。表现较为稳定，方差小
+
+![image-20231019153820272](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231019153820272.png)
+
+协同调度两个LC和一个BE，比较BE的性能表现。CLite的结果更接近于最优解。
+
+![image-20231019154112267](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231019154112267.png)
+
+协同运行三个LC和一个BE，观察各种资源分配方案下，BE业务的性能。Clite也是最优的
+
+![image-20231019154414574](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231019154414574.png)
+
+两个LC也三个BE，CLite在多BE业务下也能够达到较优的效果
+
+![image-20231019154802774](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231019154802774.png)
+
+在采样上需要的开销，CLite略高于Parties，在找到满足QoS要求的资源配置方案之后，CLite会继续进行优化
+
+![image-20231019155757116](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231019155757116.png)
+
+三个LC和一个BE，固定了两个LC的负载，动态调整第三个LC的负载，观察CLite对资源的分配以及BE业务的吞吐量。CLite是可以感知到负载的变化并及时调整达到新的最优方案的
+
+**总的实验流程**
+
+- 先测定QoS目标和最大负载标准
+- figure7：3个LC，0个BE，观察协同调度下某一个LC能达到的最大负载。证明CLite提高LC的负载能力
+- figure8：3个LC，1个BE，观察协同调度下某一个LC能达到的最大负载。证明CLite提高LC的负载能力
+- figure9：3个LC，1个BE，比较了不同方法给出的分配方案。证明CLite为什么较优
+- figure10：3个LC，0个BE，固定两个LC的负载，调整第三个LC的负载，比较三个LC的平均性能，证明Clite能提高LC的性能
+- figure11：3个LC，0个BE，固定两个LC的负载，调整第三个LC的负载，多次运行，比较每次之间的差距。证明CLite的可变性小
+- figure12：2个LC，1个BE，观察在两个LC不同的负载之下，BE能达到的性能。证明LC能提高BE的性能
+- figure13：3个LC，1个BE，观察在三个LC均恒定负载的情况下，BE的性能。证明LC能提高BE的性能
+- figure14：2个LC，3个BE，观察在两个LC均恒定负载的情况下，三个BE的平均性能。证明CLite在多BE下表现较好
+- figure15：不同的LC也BE配比，验证CLite的采样开销
+- figure16：3个LC，1个BE，固定了两个LC的负载，动态调整第三个LC的负载，比较资源的分配方案以及BE的性能。证明CLite的动态调整能力
+- CLite对BO参数调优不敏感
+- Clite优于其他的空间探索算法
+
+### 6. 相关工作
+
+1. unmanaged
+
+不进行分区，探索使业务之间不争夺共同资源还能满足QoS的并置方案。
+
+缺点是需要先验知识，不能动态调整。同时减少了可共存的应用方案
+
+Cooper和Hound不能保证QoS
+
+2. 单LC多BE的分区策略
+
+只考虑一个LC和多个BE协同调度。
+
+缺点是只保证了LC的QoS，忽视了BE的性能
+
+3. 多LC多BE的分区策略
+
+Parties，不能找到最优解
+
+
+
+## OLPart
+
+### 摘要
+
+以性能计数器来近似衡量应用的资源敏感性
+
+采用上下文多臂赌博机来设计分区方案
+
+开源：https://github.com/oksdfncsj/OLPart.
+
+### 1. 介绍
+
+- 算法应该能获得最优解
+- 高效性和鲁棒性
+- 不需要先验知识
+
+之前方法的问题：在搜索过程中忽视了应用对资源敏感性的问题
+
+运行时性能计数器可以在一定程度上指示应用对资源的敏感程度
+
+### 2. 动机
+
+#### 2.1 资源分区的难点
+
+应用对于资源的敏感性是动态变化的，会收到多种因素的影响。比如另一种资源分配的多少，应用负载的多少
+
+![](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231019213353824.png)
+
+- figure1：说明应用对资源的敏感性存在的一个复杂情况
+
+#### 2.2 已有方法的限制
+
+Parties：parties在给应用增加资源时有一个做法。如果新分配了资源并没有缓解应用的QoS违规问题。parties不会回收刚刚分配的资源，而是会继续追加其他类型的资源（甚至还是当前的资源）。但这种做法本身存在问题。OLPart实验过程中观察到，例如在某一种资源A没有达到要求时，一味的增加B资源是没用的。
+
+CLite：Clite的问题是缺乏对应用具体状态的感知，Clite中有一项设置是当有任意一个应用QoS违规时，评分函数不会超过0.5。但决策时只是知道了有应用QoS违规，但是不知道具体是哪个应用违规。此时再进行决策。是有可能给正常运行的应用追加资源的。同样，仅靠一个标量值，CLite也无法感知到应用对资源的敏感性。
+
+![image-20231019213713784](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231019213713784.png)
+
+- figure2：说明CLite在探索过程中还是存在低效的问题
+
+#### 2.3 存在的机会
+
+通过性能计数器来指示应用对资源的敏感程度
+
+![image-20231019214151839](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231019214151839.png)
+
+- figure3：不断改变LLC cacheway的分配，左边是延迟的变化，右边是cache miss率的变化。二者十分相近。
+
+寻找应用j对资源r的敏感性表现为哪一个性能计数器，实验设计
+
+1. 针对应用r，设计1000种资源分配方案
+2. 在若干资源方案之中，是资源r从最小变化到最大。其他配置保持不变，
+3. 记录下每一次的延迟和所有待定的性能计数器
+4. 计算延迟的变化和哪一个性能计数器的变化相关性最大。
+
+总共测了6个LC应用，3种资源，100个待定的性能计数器
+
+![image-20231019214826527](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231019214826527.png)
+
+最左侧是6个应用，测试了每个应用对三个资源的敏感性，可以通过哪些性能计数器表现出来。
+
+**这里各个性能计数器的含义稍后查一下**
+
+### 3. 对OLPart的总览
+
+设计准则
+
+- 多资源的联合搜索
+- 轻量级，高响应
+- 不需要先验知识
+- 采用性能计数器指示配置空间的探索
+
+CMAB：在一系列实验中，选择一组动作，最大化所选行动的总收益
+
+#### 3.1 多臂赌博机
+
+MAB和UCB
+
+CMAB和LinUCB
+
+#### 3.2 为什么CMAB使用与资源分区问题
+
+阐述了四个方面的原因
+
+#### 3.3 应用CMAB的挑战
+
+探索空间过大
+
+奖励函数的设计
+
+### 4. OLPart的设计
+
+#### 4.1 Bandits和arm的设计
+
+bandits代表老虎机，问题模型本身，
+
+arm代表每一步的动作
+
+采用分散化的策略，为不同的资源和应用建立独立的bandits。在决策时，由所有bandits协同决策
+
+- 完全隔离与部分共享
+
+每一个bandits负责一个应用和一个资源。每一个bandit的arm数量代表了资源的总数
+
+#### 4.2 上下文特征
+
+对每个应用，维护一个集合，包含了能代表资源敏感性的性能计数器的集合。
+
+针对于每个bandit（维护一个应用和一个资源的关系），在决策过程中使用的上下文信息，还包含了其他应用的性能计数器信息。因为在决策过程中，对每一个应用资源的分配是会收到其他应用当前资源分配方式的干扰的。
+
+#### 4.3 摇臂选择策略
+
+部分共享：采用标准的LinUCB
+
+完全隔离：基于贪心算法的束搜索法
+
+束搜索法这里没有完全理解
+
+![image-20231021144628114](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231021144628114.png)
+
+#### 4.4 奖励函数的设计
+
+违反QoS的情况
+
+满足QoS的情况
+
+#### 4.5 多版本
+
+定期构建一个新的bandits
+
+#### 4.6 对旧的bandit的利用
+
+利用旧的bandit的相关参数来初始化新到来的应用业务
+
+如果一个应用之前在当前服务器节点上部署过，则可以直接用之前与这个应用相关的bandit来初始化新的bandit
+
+否则，可以用之前所有bandit的平均值来初始化新的应用的bandit
+
+#### 4.7 整合
+
+![image-20231021163542229](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231021163542229.png)
+
+OLPart的整一个运行流程
+
+### 5. 实验评估
+
+#### 5.1 实验设置
+
+##### 实验环境
+
+![image-20231021163657367](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231021163657367.png)
+
+禁止超线程和超频。
+
+应该是10个物理核，每个物理核上两个逻辑核，一共20个核心。分了一个CPU core跑操作系统，其他的跑应用
+
+##### 分配的资源
+
+CPU核心，缓存大小和内存带宽。CPU核心采用完全隔离的策略，缓存大小和内存带宽采用部分共享
+
+CAT可以用于分配cache way，但需要是连续的
+
+MBA可以给应用分配指定比例的带宽
+
+##### 待测应用
+
+![image-20231021165046997](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231021165046997.png)
+
+实验中使用的LC和BE业务
+
+工作中的负载使用的是tailbench套件，BE的负载通过PARSEC套件获得
+
+QoS的确定和CLite中使用的方法近似
+
+##### OLPart的配置
+
+- 三秒做一次决策
+- 每个应用选择五个性能计数器
+- 最多维持三个版本的bandits
+- 束搜索算法中为每个bandit选择5个arm
+- 到达给定的搜索时间就结束
+
+#### 5.2 Baselines
+
+选择了parties，Clite和离线分析的oracles
+
+#### 5.3 结果和分析
+
+##### 5.3.1 算法的最优性
+
+![image-20231021170310547](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231021170310547.png)
+
+- figure5：3个LC，0个BE，测试在前两个应用的不同负载下，第三个应用能达到的最高负载，用于验证OLPart等处的分配方案的最优性
+
+![image-20231021191334177](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231021191334177.png)
+
+- figure6：3个LC，1个BE，比较在不同负载下，BE业务的吞吐量：验证OLPart能最大化BE业务的性能
+
+![image-20231021191349737](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231021191349737.png)
+
+- figure7：3个LC，1个BE，比较在同一个负载下，BE吞吐量随时间的变化。验证OLPart探索空间的效率更高
+
+![image-20231021191427822](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231021191427822.png)
+
+- figure8：3个LC，一个BE，LC的应用的负载都是随机的。来比较不同方法下BE业务的吞吐量。验证OLPart能最大化BE吞吐量
+
+##### 5.3.2 可扩展性
+
+![image-20231021191939870](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231021191939870.png)
+
+- figure9：在不同规模的协同调度作业下，OLPart能以较快的速度找到最优解。同时BE的吞吐量也是最高的
+
+##### 5.3.3 上下文特征的有效性
+
+![image-20231021193158033](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231021193158033.png)
+
+在使用上下文特征和不使用上下文特征的两种情况下，BE业务的吞吐性能和找到最优解的时间都存在一定的差距
+
+##### 5.3.4 bandits重用的有效性
+
+![image-20231021193824177](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231021193824177.png)
+
+做了三组实验，每组实验分两个阶段。第一个阶段跑60s，第二个阶段跑60s，以第二个阶段中BE的吞吐量作为衡量指标。
+
+其中，第一组实验，前后两个阶段运行的是完全不同的应用。第二组实验，前后两个阶段运行的应用有部分相同。而在第三组实验，前后两个阶段运行的应用则完全相同。三组实验下，第三组实验的性能表现是最好的。说明了bandit重用这一机制确实能缓解冷启动的问题。在某些应用场景下，能够更迅速的找到新部署的协同调度任务的最优解。
+
+##### 5.3.5 采用多版本bandits的有效性
+
+![image-20231021194643213](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231021194643213.png)
+
+对于LC和BE以及LC负载的设置。选择了3个LC和1个BE的组合。LC业务的负载随时间进行变化。来模拟实际应用中，负载的波动情况。
+
+对于多版本bandits这一机制。主要包含两个方面。保存bandits的版本数量和创建新的bandits的频率。做了两组实验，分别是固定这两个因素中的一个，然后动态调整另外一个。
+
+左图是不同频率下的表现。过高和过低都不太行
+
+右图是固定了频率，然后调整版本数的表现，同样也是过高和过低都不太行。但同时，K=3的情况总是优于K=1的情况。说明多版本bandits这一机制本身，还是有效的。
+
+#### 5.4 OLPart的开销
+
+![image-20231021195426017](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231021195426017.png)
+
+类似线性的时间开销，比较高效
+
+### 总的实验设计
+
+总体先验证了最优性，分为两部分，没有BE下LC能达到多高的负载。和LCBE混合调度下，BE能有多高的吞吐量。
+
+1. 三个LC调度。比较能够达到的最大负载（figure5）。
+2. 三个LC和1个BE调度。保证不同方法下LC以相同的负载运行，比较BE能达到的吞吐量（figure6）。再扩展到若干应用之间的调度。在任何情况下，OLPart的BE业务都能有最大的吞吐量（figure8）.
+
+然后验证了高效性.
+
+3. 在某一种负载下，比较不同的方法找到最优解需要的时间，同时从侧面也验证了BE吞吐量的最优（figure7）
+
+然后验证了可扩展性
+
+4. 不仅仅是3个LC，实验中检测了在更多的LC与BE进行协同调度的情况下，OLPart的查询速度和BE业务的表现也都是较优的（figure9）
+
+然后验证了算法设计中，部分模块的有效性
+
+5. 类似于消融实验的方式，验证了OLPart中使用上下文特征是有效的（figure10）
+6. 验证了bandits重用是有效的
+7. 验证了多版本bandits是有效的（figure11）
