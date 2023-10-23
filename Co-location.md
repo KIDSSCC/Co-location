@@ -524,7 +524,7 @@ Parties，不能找到最优解
 
 采用上下文多臂赌博机来设计分区方案
 
-开源：https://github.com/oksdfncsj/OLPart.
+开源：https://github.com/oksdfncsj/OLPart
 
 ### 1. 介绍
 
