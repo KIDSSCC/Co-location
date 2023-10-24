@@ -480,7 +480,7 @@ def refer_llc(llc_config:List[int], num_llc:int) -> List[str]:
       while now_config < size_config:
             min_llc = min(llc)
             for i in range(len(llc)):
-                  if llc[i] == min_llc and ini_list[i] == 0:
+                  if llc[i] == min_llc and ini_list[i] == 0:    
                         ini_list[i] = 1
                         now_config += 1
                         llc[i] += 1

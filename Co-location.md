@@ -2,7 +2,7 @@
 
 ## CPU Socket
 
-<img src="https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Picture1280X1280.PNG" alt="1280X1280" style="zoom: 50%;" />
+<img src="https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Picture1280X1280.PNG" alt="1280X1280"  />
 
 一个CPU Socket可以视为一个处理器，
 
@@ -780,3 +780,21 @@ QoS的确定和CLite中使用的方法近似
 5. 类似于消融实验的方式，验证了OLPart中使用上下文特征是有效的（figure10）
 6. 验证了bandits重用是有效的
 7. 验证了多版本bandits是有效的（figure11）
+
+
+
+# 关于NUMA
+
+## 一开始的UMA（Uniform Memory Access）
+
+![image-20231024153540762](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231024153540762.png)
+
+多核计算机中。所有的核心通过相同的总线来访问内存。对于每个核心来说，访问内存的每个地方都是一致的。
+
+但随着多核技术的发展。所有的核心共享总线带来了一些问题
+
+## 后来的NUMA（Non-Uniform Memory Access）
+
+![image-20231024153937898](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231024153937898.png)
+
+在NUMA中引入了节点的概念，每一个NUMA节点可以是由若干个CPU核心以及一片固定内存区域组成。一般来说，是一个Socket组成一个核心。每个NUMA节点有自己的集成内存控制器IMC，同一个节点中的CPU core通过同一个IMC来访问自己的固定内存。而不同的NUMA节点直接通过QPI总线连接。而QPI的速度是低于IMC。这就使得CPU core在访问不同内存区域的速度不一样。访问自己的固定区域时，速度会较快，而访问其他NUMA节点的内存区域时，速度会较慢
