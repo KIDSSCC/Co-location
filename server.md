@@ -89,6 +89,46 @@ sudo docker stop 容器id     # 停止一个正在运行的容器
 sudo docker kill 容器id     # 强制停止当前的容器
 ```
 
+查看日志信息
+
+```shell
+docker logs -tf --tail 10 容器进程号
+# -tf 显示日志
+# -tail num  显示指定数目的日志
+```
+
+查看容器内进程
+
+```shell
+docker top 进程号
+```
+
+查看元数据
+
+```
+docker inspect 进程号
+```
+
+进入正在执行的容器
+
+```shell
+docker exec -it 容器id /bin/bash
+docker attach 容器id
+```
+
+将容器中的文件拷贝到服务器上：将两个路径反过来也可以实现反向传输
+
+```shell
+# 在服务器中执行
+docker cp 容器id:容器内路径 服务器路径
+```
+
+
+
+
+
+
+
 查看numa节点的分布：
 
 ```shell
@@ -245,3 +285,142 @@ sudo pqos -a "core:14=14,15"
 ```
 
 注：以sudo taskset -c 4,5 ./cpu_load &的方式执行程序时，sudo本身也会作为一个进程存在于后台。并且，此时返回的进程号时sudo进程的进程号，而不是cpu_load的进程号。需要通过ps -a来确定cpu_load的进程号
+
+# 实验可行性验证
+
+Moses和NGINX redis
+
+## Nginx的部署
+
+```shell
+docker search nginx
+docker pull nginx
+docker run -d --name nginx01 -p 3344:80 nginx
+
+curl localhost:3344			# 尝试访问
+```
+
+正向代理：代理客户端发起请求
+
+反向代理：代理服务器接受请求，把请求分发到对应的服务器上
+
+先不考虑docker的部署，在服务器上直接部署
+
+```shell
+# 启动
+sudo ./nginx
+# 停止
+sudo ./nginx -s stop
+# 刷新配置文件
+sudo ./nginx -s reload
+# 查看nginx进程
+ps aux | grep nginx
+```
+
+
+
+
+
+- 以编译安装的方式安装了nginx
+
+- 安装了ab测试工具
+
+  ```shell
+  sudo apt-get install apache2-utils
+  ```
+
+- ab工具进行访问测试
+
+  ```shell
+  ab -c 100 -n 1000  http://localhost/
+  ```
+
+
+
+```shell
+sudo taskset -c 16,17,18 ./nginx
+sudo taskset -c 4 ab -c 1000 -n 2000000  http://localhost/
+
+# 提高同时打开的文件限制
+ulimit -n 65536
+```
+
+
+
+### 先测试各个资源隔离对于nginx本身的影响。
+
+将nginx部署在一个socket上，测试用的ab程序部署在另一个socket上。
+
+
+
+#### 先测试核心的影响
+
+将所有核心的带宽和缓存全部放开，ab程序绑定在核心28（socket 1）上，nginx绑定在socket 0 的1，2，4，8个核心上。
+
+记录
+
+
+
+------
+
+补加一个实验，nginx中的进程设置对最终的CPU运行情况会有怎样的影响
+
+总测试数2000000，并发2000
+
+1. workprocess设置一个进程，taskset绑定2个核心。
+2. workprocess设置两个进程，taskset绑定两个核心
+3. workprocess设置四个进程，taskset绑定2个核心
+
+```shell
+# 第一组实验
+sudo ./nginx -s stop
+# 调整好连接数2048，设置好工作进程为1个
+sudo taskset -c 14,15 ./nginx 
+sudo ./nginx -s reload
+# 重复三次，记录时间，观察核心负载情况
+sudo taskset -c 28 ab -c 2000 -n 2000000  http://localhost/
+
+
+# 第二组实验
+sudo ./nginx -s stop
+# 调整好连接数2048，设置好工作进程为2个
+sudo taskset -c 14,15 ./nginx 
+sudo ./nginx -s reload
+# 重复三次，记录时间，观察核心负载情况
+sudo taskset -c 28 ab -c 2000 -n 2000000  http://localhost/
+
+# 第三组实验
+sudo ./nginx -s stop
+# 调整好连接数2048，设置好工作进程为4个
+sudo taskset -c 14,15 ./nginx
+sudo ./nginx -s reload
+# 重复三次，记录时间，观察核心负载情况
+sudo taskset -c 28 ab -c 2000 -n 2000000  http://localhost/
+```
+
+nginx中的进程设置会影响到分配的CPU的负载量。考虑nginx中的进程设置等于或大于taskset中的设置
+
+------
+
+进一步提高并发量会不会影响到CPU的负载
+
+分配两个核，nginx工作进程设置为两个，
+
+1. 并发量2000
+2. 并发量4000
+3. 并发量6000
+
+```shell
+sudo ./nginx -s stop
+# 调整好连接数8192，设置好工作进程为2个
+sudo taskset -c 14,15 ./nginx 
+sudo ./nginx -s reload
+#第一组实验
+sudo taskset -c 28 ab -c 2000 -n 2000000  http://localhost/
+#第二组实验
+sudo taskset -c 28 ab -c 4000 -n 2000000  http://localhost/
+#第三组实验
+sudo taskset -c 28 ab -c 6000 -n 2000000  http://localhost/
+```
+
+并发程度越高，CPU的负载会有一定程度的提升。但有限
