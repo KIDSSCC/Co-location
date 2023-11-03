@@ -424,3 +424,284 @@ sudo taskset -c 28 ab -c 6000 -n 2000000  http://localhost/
 ```
 
 并发程度越高，CPU的负载会有一定程度的提升。但有限
+
+------
+
+### 测缓存大小和内存带宽产生的影响
+
+#### 测缓存大小
+
+绑定2个核，nginx内工作进程设置为2，并发先设置为4000，随后设置为10000，总测试书2000000
+
+- 两个核的cacheway都设置为一路cache
+- 两个核的cacheway都设置为6路cache
+- 两个核的cacheway都设置为12路cache
+
+```shell
+sudo taskset -c 14,15 ./nginx
+sudo ./nginx -s reload
+sudo pqos -e "LLC@0:1=0x1"		# 调整Socket0上的COS1
+sudo pqos -a "core:1=14,15"	# 将COS13应用到核心4和核心5上
+sudo taskset -c 28 ab -c 4000 -n 2000000  http://localhost/
+
+sudo pqos -e "LLC@0:1=0x3f"		# 调整Socket0上的COS1
+sudo pqos -a "core:1=14,15"	# 将COS13应用到核心4和核心5上
+sudo taskset -c 28 ab -c 4000 -n 2000000  http://localhost/
+
+sudo pqos -e "LLC@0:1=0xfff"		# 调整Socket0上的COS1
+sudo pqos -a "core:1=14,15"	# 将COS13应用到核心4和核心5上
+sudo taskset -c 28 ab -c 4000 -n 2000000  http://localhost/
+
+sudo pqos -e "LLC@0:1=0x1"		# 调整Socket0上的COS1
+sudo pqos -a "core:1=14,15"	# 将COS1应用到核心14和核心15上
+sudo taskset -c 28 ab -c 10000 -n 2000000  http://localhost/
+
+sudo pqos -e "LLC@0:1=0x3f"		# 调整Socket0上的COS1
+sudo pqos -a "core:1=14,15"	# 将COS1应用到核心14和核心15上
+sudo taskset -c 28 ab -c 10000 -n 2000000  http://localhost/
+
+sudo pqos -e "LLC@0:1=0xfff"		# 调整Socket0上的COS1
+sudo pqos -a "core:1=14,15"	# 将COS1应用到核心14和核心15上
+sudo taskset -c 28 ab -c 10000 -n 2000000  http://localhost/
+
+
+```
+
+观察到虽然时间变化不大，但是随着cacheway的增加，CPU的负载降下来了
+
+#### 测内存带宽
+
+绑定2个核，nginx内工作进程设置为2，并发先设置为4000，随后设置为10000，总测试数2000000
+
+- 两个核的带宽设置为10%
+- 两个和的带宽设置为50%
+- 两个核的带宽设置为100%
+
+```shell
+sudo taskset -c 14,15 ./nginx
+sudo pqos -e "mba@0:1=10"
+sudo pqos -a "core:1=14,15"	# 将COS13应用到核心4和核心5上
+sudo taskset -c 28 ab -c 4000 -n 2000000  http://localhost/
+
+sudo pqos -e "mba@0:1=50"
+sudo pqos -a "core:1=14,15"	# 将COS13应用到核心4和核心5上
+sudo taskset -c 28 ab -c 4000 -n 2000000  http://localhost/
+
+sudo pqos -e "mba@0:1=100"
+sudo pqos -a "core:1=14,15"	# 将COS13应用到核心4和核心5上
+sudo taskset -c 28 ab -c 4000 -n 2000000  http://localhost/
+```
+
+------
+
+开始测不同socket上的情况
+
+1. 两个核，一个在socket0，一个在socket1
+2. 内存带宽分别设置为10%，30%，50%
+
+```shell
+sudo ./nginx -s stop
+sudo pqos -R
+sudo taskset -c 14,28 ./nginx
+sudo pqos -e "mba:1=10"
+sudo pqos -a "core:1=14,28"
+sudo taskset -c 42 ab -c 4000 -n 2000000  http://localhost/
+
+sudo ./nginx -s stop
+sudo pqos -R
+sudo taskset -c 14,15 ./nginx
+sudo pqos -e "mba:1=10"
+sudo pqos -a "core:1=14,15"
+sudo taskset -c 42 ab -c 4000 -n 2000000  http://localhost/
+```
+
+一边80%-90%，另一边50%-60%
+
+![image-20231028104606163](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231028104606163.png)
+
+一边80%-90%，一边60%-70%
+
+- 10月30日，两个核，内存带宽放10%，cache way放0x1,比较对齐和不对齐的情况
+
+```shell
+#对齐的形式
+sudo pqos -R
+sudo ./nginx -s stop
+sudo taskset -c 14,15 ./nginx
+sudo pqos -e "mba@0:1=10"
+sudo pqos -e "LLC@0:1=0x1"
+sudo pqos -a "core:1=14,15"
+
+sudo taskset -c 42 ab -c 4000 -n 2000000  http://localhost/
+sudo taskset -c 9 ab -c 4000 -n 2000000  http://localhost/
+
+#不对齐的形式
+sudo pqos -R
+sudo ./nginx -s stop
+sudo taskset -c 14,28 ./nginx
+sudo pqos -e "mba:1=10"
+sudo pqos -e "LLC:1=0x1"
+sudo pqos -a "core:1=14,28"
+
+sudo taskset -c 42 ab -c 4000 -n 2000000  http://localhost/
+sudo taskset -c 9 ab -c 4000 -n 2000000  http://localhost/
+```
+
+- 10月31日
+
+关于Jmeter的测试
+
+```shell
+jmeter -n -t baidu.jmx -l baidu-jmeter.jtl
+```
+
+在windows本地先配置好测试计划，然后在服务器上运行。得到的结果也能够在windows上解析。
+
+- 11/1
+
+测试计划是4000的并发，10秒内启动，一共运行40秒
+
+nginx在14,15上，jmeter在2-12上，
+
+```shell
+sudo pqos -R
+sudo ./nginx -s stop
+sudo taskset -c 14,15 ./nginx
+sudo pqos -e "mba@0:1=10"
+sudo pqos -e "LLC@0:1=0x1"
+sudo pqos -a "core:1=14,15"
+taskset -c 2-12 jmeter -n -t nginx-test.jmx -l nginx-jmeter.jtl
+```
+
+![image-20231101224506021](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231101224506021.png)
+
+![image-20231101230712279](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231101230712279.png)
+
+![image-20231101230804962](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231101230804962.png)
+
+nginx在14,28上，jmeter在42-52上，
+
+```shell
+sudo pqos -R
+sudo ./nginx -s stop
+sudo taskset -c 14,28 ./nginx
+sudo pqos -e "mba:1=10"
+sudo pqos -e "LLC:1=0x1"
+sudo pqos -a "core:1=14,28"
+taskset -c 42-52 jmeter -n -t nginx-test.jmx -l nginx-jmeter.jtl
+```
+
+![image-20231101232802406](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231101232802406.png)
+
+![image-20231101232830113](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231101232830113.png)
+
+![image-20231101232949303](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231101232949303.png)
+
+
+
+- nginx在14，15，jmeter在2-12
+
+![image-20231102095522736](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231102095522736.png)
+
+![image-20231102100034966](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231102100034966.png)
+
+![image-20231102100637490](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231102100637490.png)
+
+- nginx在14，15，jmeter在30-40
+
+![image-20231102101525661](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231102101525661.png)
+
+![image-20231102102512854](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231102102512854.png)
+
+![image-20231102103348408](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231102103348408.png)
+
+- nginx在14，28，jmeter在2-12
+
+![image-20231102104719460](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231102104719460.png)
+
+![image-20231102105319688](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231102105319688.png)
+
+![](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231102105847029.png)
+
+- nginx在14，28，jmeter在30-40
+
+![image-20231102110656060](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231102110656060.png)
+
+![image-20231102111432526](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231102111432526.png)
+
+![image-20231102112342476](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231102112342476.png)
+
+
+
+- 11月3日
+
+```shell
+sudo ./nginx -s stop
+sudo pqos -R
+sudo taskset -c 14,15 ./nginx
+sudo pqos -e "mba@0:1=10"
+sudo pqos -e "LLC@0:1=0x1"
+sudo pqos -a "core:1=14,15"
+```
+
+
+
+1. nginx在14，15；jmeter在1-11
+
+<img src="https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103194258939.png" alt="image-20231103194258939" style="zoom: 67%;" />
+
+![image-20231103203957377](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103203957377.png)
+
+![image-20231103204035411](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103204035411.png)
+
+![image-20231103204159627](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103204159627.png)
+
+2. nginx在14，15，jmeter在30-40
+
+<img src="https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103195239543.png" alt="image-20231103195239543" style="zoom:67%;" />
+
+![image-20231103223943194](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103223943194.png)
+
+![image-20231103224029892](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103224029892.png)
+
+![image-20231103224114940](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103224114940.png)
+
+3. nginx在14，42；jmeter在1-11
+
+<img src="https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103203805900.png" alt="image-20231103203805900" style="zoom:67%;" />
+
+![image-20231103224203455](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103224203455.png)
+
+![image-20231103224246230](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103224246230.png)
+
+![image-20231103224324715](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103224324715.png)
+
+4. nginx在14，42；jmeter在30-40
+
+<img src="https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103204723235.png" alt="image-20231103204723235" style="zoom:67%;" />
+
+![image-20231103224430665](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103224430665.png)
+
+![image-20231103224615129](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103224615129.png)
+
+![image-20231103224657029](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103224657029.png)
+
+5. nginx在42，43；jmeter在1-11
+
+<img src="https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103210138019.png" alt="image-20231103210138019" style="zoom:67%;" />
+
+![image-20231103224755678](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103224755678.png)
+
+![image-20231103224903270](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103224903270.png)
+
+![image-20231103224943711](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103224943711.png)
+
+6. nginx在42，43；jmeter在30-40
+
+<img src="https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103211633730.png" alt="image-20231103211633730" style="zoom:67%;" />
+
+![image-20231103225038559](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103225038559.png)
+
+![image-20231103225118425](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103225118425.png)
+
+![image-20231103225155170](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103225155170.png)
