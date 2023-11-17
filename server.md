@@ -705,3 +705,130 @@ sudo pqos -a "core:1=14,15"
 ![image-20231103225118425](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103225118425.png)
 
 ![image-20231103225155170](https://raw.githubusercontent.com/KIDSSCC/MarkDown_image/main/Pictureimage-20231103225155170.png)
+
+
+
+
+
+------
+
+redis的部署测试
+
+```shell
+# 安装
+sudo apt-get install -y redis-server
+
+#设置密码，k15648611412
+sudo vim /etc/redis/redis.conf
+
+# 进入redis命令行模式
+redis-cli
+
+# 查看redis状态
+systemctl status redis
+
+# 存储键值对
+set mykey "Hello, Redis!"
+# 获取键值对
+get mykey
+
+# 存储哈希值
+hset user:id:1001 username "john_doe" email "john@example.com"
+# 获取哈希值特定字段
+hget user:id:1001 username
+
+# 停止redis
+sudo service redis-server stop
+# 重新启动redis
+sudo service redis-server restart
+ulimit -n 65536
+```
+
+压力测试
+
+```shell
+# 直接进行测试
+redis-benchmark
+
+-c   	# 指定并发连接数
+-n		# 指定总连接数
+-d		# 指定set与get时数据大小
+```
+
+redis的指标
+
+- PING_INLINE：inline协议的ping命令
+- PING_BULK：bulk协议的ping命令
+
+- SET：存储键值对
+- GET：查询键值对
+- INCR：执行递增操作
+- LPUSH：列表左端进行插入
+- RPUSH：列表右端进行插入
+- LPOP：左端进行弹出
+- RPOP：右端进行弹出
+- SADD：向集合中添加元素
+- HSET：存储哈希值
+- SPOP：从集合中弹出
+- LRANGE：获取列表指定范围的元素
+- MSET：同时设置多个键值对
+
+```shell
+# redis的停止
+sudo service redis-server stop
+# 先启动redis，再查询redis的进程号，再进行单独的绑定
+sudo service redis-server restart
+ps aux|grep redis
+sudo taskset -cp 14,15 <PID>
+
+# 设置MB与cache
+sudo pqos -R
+sudo pqos -e "mba@0:1=10"
+sudo pqos -e "LLC@0:1=0x1"
+sudo pqos -a "core:1=14,15"
+
+# redis-benchmark进行测试
+redis-benchmark -c 1000 -n 200000 -d 10 -t set
+
+
+```
+
+------
+
+启用redis6.2的多线程配置
+
+```shell
+# 配置文件中修改多线程
+io-threads 4
+```
+
+```shell
+sudo taskset -cp 14,15 <PID>
+sudo pqos -R
+sudo pqos -e "mba@0:1=10"
+sudo pqos -e "LLC@0:1=0x1"
+sudo pqos -a "core:1=14,15"
+redis-benchmark -c 20000 -n 100000 -d 1024 --threads 4
+
+redis-benchmark -c 18000 -n 100000 -d 1024 -t lrange  --threads 4 -q
+```
+
+------
+
+```shell
+# 列举numa节点状态
+numactl --hardware
+
+# 查看numa状态
+numactl --show
+
+# 查看完整的numa访存情况
+numastat
+
+# 查看指定进程的numa内存情况
+numastat -p
+
+#numa绑定内存分配启动
+numactl --membind=0 redis-server ../etc/redis.conf
+```
+
